@@ -1,0 +1,63 @@
+version: '3.9'
+services:
+  atpos-api:
+    build: ./atpos-almacen-api/
+    environment:
+      - MONGO_SERVER=db
+      - RABBITMQ_SERVER=sync-queue
+    depends_on:
+      db:
+        condition: service_started
+      sync-queue:
+        condition: service_healthy
+    ports:
+      - 3000:3000
+  db:
+    image: mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    volumes:
+      - db_data:/data/db
+    ports:
+      - 27:27017
+  sync-queue:
+    image: rabbitmq
+    volumes:
+      - q_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 60s
+      timeout: 60s
+      retries: 3
+  sync:
+    build: ./atpos-sync/
+    environment:
+    - RABBITMQ_SERVER=sync-queue
+    - ATPOS_CENTRAL=central
+    depends_on:
+      sync-queue:
+        condition: service_healthy
+  central: 
+    build: ./atpos-facturacion
+    environment:
+      - MONGODB_URI=db-central
+    depends_on:
+      db-central:
+        condition: service_started
+  db-central:
+    image: mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    volumes:
+      - db_central_data:/data/db
+    ports:
+      - 28:27017
+networks:
+  default:
+    driver: bridge
+volumes:
+  db_data:
+  q_data:
+  db_central_data:
